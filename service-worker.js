@@ -1,4 +1,4 @@
-const CACHE_NAME = 'deepwork-planner-v3';
+const CACHE_NAME = 'deepwork-planner-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',
