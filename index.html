@@ -111,6 +111,25 @@
     padding: 0 8px; text-align: center;
   }
   .meta-cell + .meta-cell { border-left: 1px solid var(--border); }
+  .task-column-head {
+    display: flex; align-items: stretch; gap: 6px;
+    margin: 2px 0 8px;
+    padding-left: 40px;
+    color: var(--text-mute);
+    font-size: 11px; font-weight: 750;
+    letter-spacing: -0.01em;
+  }
+  .task-column-head .head-spacer { flex: 1; min-width: 0; }
+  .task-column-head .head-meta {
+    width: 176px; min-width: 176px; flex-shrink: 0;
+    display: grid; grid-template-columns: 112px 64px;
+    border-left: 1px solid var(--border);
+  }
+  .task-column-head .head-cell {
+    min-height: 24px; display: flex; align-items: center; justify-content: center;
+    text-align: center; line-height: 1.15; padding: 0 8px;
+  }
+  .task-column-head .head-cell + .head-cell { border-left: 1px solid var(--border); }
   .due-badge, .hour-badge {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 0; width: 100%;
@@ -269,6 +288,9 @@
     .grp::before { height: 16px; }
     .tk { align-items: center; gap: 8px; padding: 10px; }
     .tk .meta { width: 148px; min-width: 148px; grid-template-columns: 94px 54px; }
+    .task-column-head { padding-left: 34px; font-size: 10px; margin-bottom: 6px; }
+    .task-column-head .head-meta { width: 148px; min-width: 148px; grid-template-columns: 94px 54px; }
+    .task-column-head .head-cell { min-height: 22px; padding: 0 5px; }
     .meta-cell { min-height: 26px; padding: 0 5px; }
     .due-badge, .hour-badge { padding: 3px 5px; font-size: 12px; }
     .stat { padding: 10px 8px; }
@@ -366,6 +388,14 @@
       <div class="lbl">미완료 태스크</div>
       <div class="val" id="count">0</div>
     </div>
+  </div>
+
+  <div class="task-column-head" aria-hidden="true">
+    <span class="head-spacer"></span>
+    <span class="head-meta">
+      <span class="head-cell">마감일</span>
+      <span class="head-cell">예상<br>소요시간</span>
+    </span>
   </div>
 
   <div id="task-list"></div>
@@ -704,8 +734,12 @@ function escapeHtml(s) {
   return (s||"").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 }
 
+function renderDateForMeta(due) {
+  return due ? due.slice(5).replace('-', '/') : '—';
+}
+
 function renderMeta(due, hours) {
-  const dueHtml = due ? '<span class="due-badge">마감 ' + escapeHtml(due.slice(5)) + '</span>' : '<span class="due-badge empty">마감 —</span>';
+  const dueHtml = due ? '<span class="due-badge">' + escapeHtml(renderDateForMeta(due)) + '</span>' : '<span class="due-badge empty">—</span>';
   const hourText = hours != null ? hours + 'h' : '—';
   const hourClass = hours != null ? 'hour-badge' : 'hour-badge empty';
   return '<span class="meta-cell meta-due">' + dueHtml + '</span>' +
