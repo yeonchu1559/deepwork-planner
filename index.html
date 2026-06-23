@@ -101,18 +101,29 @@
   .tk input { margin: 0; flex-shrink: 0; }
   .tk .nm { flex: 1; min-width: 0; font-size: 13px; }
   .tk .meta {
-    font-size: 13px; font-weight: 650; color: var(--text);
-    flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px;
-    white-space: nowrap;
+    width: 176px; min-width: 176px; flex-shrink: 0;
+    display: grid; grid-template-columns: 112px 64px; align-items: center;
+    color: var(--text); white-space: nowrap;
+    border-left: 1px solid var(--border);
   }
+  .meta-cell {
+    min-height: 28px; display: flex; align-items: center; justify-content: center;
+    padding: 0 8px; text-align: center;
+  }
+  .meta-cell + .meta-cell { border-left: 1px solid var(--border); }
   .due-badge, .hour-badge {
     display: inline-flex; align-items: center; justify-content: center;
-    padding: 3px 8px; border-radius: 999px; line-height: 1.25;
+    min-width: 0; width: 100%;
+    padding: 3px 7px; border-radius: 999px; line-height: 1.25;
     border: 1px solid var(--border); letter-spacing: -0.01em;
+    font-size: 13px; font-weight: 750;
   }
   .due-badge {
     background: var(--warn-bg); color: var(--warn-tx);
     border-color: rgba(133, 79, 11, 0.22);
+  }
+  .due-badge.empty {
+    background: var(--surface-2); color: var(--text-mute); border-color: var(--border);
   }
   .hour-badge {
     background: var(--info-bg); color: var(--info-tx);
@@ -256,9 +267,10 @@
     .stat-grid { top: 0; }
     .grp { font-size: 14px; margin: 18px 0 8px; padding-bottom: 6px; }
     .grp::before { height: 16px; }
-    .tk { align-items: flex-start; gap: 8px; padding: 10px; }
-    .tk .meta { font-size: 12px; flex-direction: column; align-items: flex-end; gap: 4px; }
-    .due-badge, .hour-badge { padding: 3px 7px; }
+    .tk { align-items: center; gap: 8px; padding: 10px; }
+    .tk .meta { width: 148px; min-width: 148px; grid-template-columns: 94px 54px; }
+    .meta-cell { min-height: 26px; padding: 0 5px; }
+    .due-badge, .hour-badge { padding: 3px 5px; font-size: 12px; }
     .stat { padding: 10px 8px; }
     .stat .val { font-size: 18px; }
     .stat .lbl { font-size: 11px; }
@@ -693,10 +705,11 @@ function escapeHtml(s) {
 }
 
 function renderMeta(due, hours) {
-  const dueHtml = due ? '<span class="due-badge">마감 ' + escapeHtml(due.slice(5)) + '</span>' : '';
+  const dueHtml = due ? '<span class="due-badge">마감 ' + escapeHtml(due.slice(5)) + '</span>' : '<span class="due-badge empty">마감 —</span>';
   const hourText = hours != null ? hours + 'h' : '—';
   const hourClass = hours != null ? 'hour-badge' : 'hour-badge empty';
-  return dueHtml + '<span class="' + hourClass + '">' + escapeHtml(hourText) + '</span>';
+  return '<span class="meta-cell meta-due">' + dueHtml + '</span>' +
+    '<span class="meta-cell meta-hour"><span class="' + hourClass + '">' + escapeHtml(hourText) + '</span></span>';
 }
 
 function renderParentTask(parent) {
