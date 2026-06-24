@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icon-192.png">
+<script src="https://accounts.google.com/gsi/client" onload="gcInit()" async defer></script>
 
 <style>
   :root {
@@ -272,6 +273,26 @@
     overflow: hidden; text-overflow: ellipsis;
   }
   .copy-btn { flex-shrink: 0; padding: 8px 20px; }
+  .gc-add-btn { padding: 7px 14px; white-space: nowrap; flex-shrink: 0; }
+  .gc-cal-row {
+    display: flex; align-items: center; gap: 7px;
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .gc-select {
+    flex: 1; min-width: 140px; padding: 6px 8px; font-size: 13px;
+    border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text);
+  }
+  .gc-input {
+    padding: 6px 8px; font-size: 13px; flex-shrink: 0;
+    border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text);
+  }
+  .gc-date { width: 128px; }
+  .gc-time { width: 88px; }
+  .gc-dur  { width: 46px; text-align: right; }
+  .gc-dur-wrap { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
   #status-stat { min-width: 240px; }
   .status-visual {
     display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -427,6 +448,18 @@
   <div id="connected-extra" class="hide" style="margin-top:12px">
     <button onclick="disconnect()">연결 해제</button>
   </div>
+
+  <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+    <div class="flex-between" style="margin-bottom:8px">
+      <span style="font-weight:600;font-size:14px">Google Calendar</span>
+      <span id="gc-status" style="font-size:12px;color:var(--text-faint)">미연결</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button id="gc-connect-btn" class="primary" onclick="gcConnect()">연결</button>
+      <button id="gc-disconnect-btn" style="display:none" onclick="gcDisconnect()">연결 해제</button>
+      <span id="gc-msg" style="font-size:12px"></span>
+    </div>
+  </div>
   </div>
 </div>
 
@@ -499,11 +532,146 @@
       <button onclick="copyTitle()" id="copy-btn" class="primary copy-btn">복사</button>
     </div>
     <div class="title-out" id="title-out">태스크를 선택하면 제목이 생성됩니다</div>
+    <div id="gc-cal-row" class="gc-cal-row hide">
+      <select id="gc-cal-select" class="gc-select" onchange="localStorage.setItem('gc_last_cal',this.value)"></select>
+      <input type="date" id="gc-date" class="gc-input gc-date">
+      <input type="time" id="gc-start" value="09:00" class="gc-input gc-time">
+      <div class="gc-dur-wrap">
+        <input type="number" id="gc-dur" value="1" min="0.5" max="12" step="0.5" class="gc-input gc-dur">
+        <span style="font-size:13px;color:var(--text-mute)">h</span>
+      </div>
+      <button id="gc-add-btn" class="primary gc-add-btn" onclick="gcAddEvent()">캘린더에 추가</button>
+    </div>
   </div>
 </div>
 
 <script>
 const API = "https://app.asana.com/api/1.0";
+
+// ─── Google Calendar 연동 ──────────────────────────────────────────────
+const GC_CLIENT_ID = '37364379331-sfb6sob273fmg7bf3b8i342v3df4ar8c.apps.googleusercontent.com';
+const GC_SCOPE = 'https://www.googleapis.com/auth/calendar';
+let gcTokenClient = null;
+let gcToken = null;       // 메모리에만 보관 (localStorage 저장 금지)
+let gcCalendars = [];
+let gcConnected = false;
+
+function gcInit() {
+  gcTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GC_CLIENT_ID,
+    scope: GC_SCOPE,
+    callback: async (resp) => {
+      if (resp.error) { gcMsg('인증 실패: ' + resp.error, true); return; }
+      gcToken = resp.access_token;
+      await gcLoadCalendars();
+    }
+  });
+}
+
+function gcConnect() {
+  if (!gcTokenClient) { gcMsg('Google 라이브러리 로딩 중입니다. 잠시 후 다시 시도하세요.', true); return; }
+  gcTokenClient.requestAccessToken({ prompt: gcConnected ? '' : 'consent' });
+}
+
+function gcDisconnect() {
+  if (gcToken) { try { google.accounts.oauth2.revoke(gcToken, () => {}); } catch(e){} }
+  gcToken = null; gcCalendars = []; gcConnected = false;
+  gcUpdateUI();
+}
+
+async function gcLoadCalendars() {
+  try {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=50', {
+      headers: { Authorization: 'Bearer ' + gcToken }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    gcCalendars = (data.items || []).sort((a, b) =>
+      (a.summaryOverride || a.summary).localeCompare(b.summaryOverride || b.summary, 'ko')
+    );
+    gcConnected = true;
+    gcUpdateUI();
+    gcMsg('', false);
+  } catch(e) { gcMsg('캘린더 로드 실패: ' + e.message, true); }
+}
+
+function gcUpdateUI() {
+  const statusEl = document.getElementById('gc-status');
+  const connectBtn = document.getElementById('gc-connect-btn');
+  const disconnectBtn = document.getElementById('gc-disconnect-btn');
+  const calRow = document.getElementById('gc-cal-row');
+  const calSel = document.getElementById('gc-cal-select');
+  if (gcConnected) {
+    statusEl.textContent = '연결됨 · ' + gcCalendars.length + '개';
+    statusEl.style.color = 'var(--ok-tx)';
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = '';
+    const savedId = localStorage.getItem('gc_last_cal') || '';
+    calSel.innerHTML = gcCalendars.map(c => {
+      const id = c.id; const nm = c.summaryOverride || c.summary;
+      return '<option value="' + escapeHtml(id) + '"' + (id === savedId ? ' selected' : '') + '>' + escapeHtml(nm) + '</option>';
+    }).join('');
+    calRow.classList.remove('hide');
+    const dateEl = document.getElementById('gc-date');
+    if (!dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+  } else {
+    statusEl.textContent = '미연결';
+    statusEl.style.color = 'var(--text-faint)';
+    connectBtn.style.display = '';
+    disconnectBtn.style.display = 'none';
+    calRow.classList.add('hide');
+  }
+}
+
+function gcMsg(text, isErr) {
+  const el = document.getElementById('gc-msg');
+  el.textContent = text;
+  el.style.color = isErr ? 'var(--danger-tx)' : 'var(--ok-tx)';
+}
+
+async function gcAddEvent() {
+  const title = document.getElementById('title-out').textContent;
+  if (!title || title === '태스크를 선택하면 제목이 생성됩니다') {
+    gcMsg('먼저 태스크를 선택하세요.', true); return;
+  }
+  if (!gcToken) { gcMsg('Google Calendar 연결이 필요합니다.', true); return; }
+
+  const calId = document.getElementById('gc-cal-select').value;
+  const date  = document.getElementById('gc-date').value;
+  const time  = document.getElementById('gc-start').value;
+  const durH  = parseFloat(document.getElementById('gc-dur').value) || 1;
+  if (!date || !time) { gcMsg('날짜와 시간을 선택하세요.', true); return; }
+
+  localStorage.setItem('gc_last_cal', calId);
+  const startDt = new Date(date + 'T' + time + ':00');
+  const endDt   = new Date(startDt.getTime() + durH * 3600000);
+
+  const addBtn = document.getElementById('gc-add-btn');
+  addBtn.disabled = true; addBtn.textContent = '추가 중...';
+
+  try {
+    const res = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + gcToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summary: title,
+          start: { dateTime: startDt.toISOString(), timeZone: 'Asia/Seoul' },
+          end:   { dateTime: endDt.toISOString(),   timeZone: 'Asia/Seoul' }
+        })
+      }
+    );
+    if (res.status === 401) { gcToken = null; gcConnect(); return; }
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'HTTP ' + res.status); }
+    addBtn.textContent = '추가됨';
+    gcMsg('캘린더에 추가했습니다.', false);
+    setTimeout(() => { addBtn.disabled = false; addBtn.textContent = '캘린더에 추가'; }, 2500);
+  } catch(e) {
+    gcMsg('추가 실패: ' + e.message, true);
+    addBtn.disabled = false; addBtn.textContent = '캘린더에 추가';
+  }
+}
 let token = "";
 let tasks = [];
 let currentFilter = "all";
@@ -1074,8 +1242,9 @@ function updateStats() {
 }
 
 function renderTitle() {
+  const effTasks = getEffectiveSelectedTasks();
   const names = [];
-  getEffectiveSelectedTasks().forEach(t => {
+  effTasks.forEach(t => {
     names.push(t.isSubtask && t.parent_name ? (t.parent_name + " > " + t.name) : t.name);
   });
   const prefix = document.getElementById("prefix").value.trim();
@@ -1083,6 +1252,12 @@ function renderTitle() {
   out.textContent = names.length ? (prefix + " — " + names.join(" + ")) : "태스크를 선택하면 제목이 생성됩니다";
   const countEl = document.getElementById("title-bar-count");
   if (countEl) countEl.textContent = names.length + "개 선택";
+  // 선택 태스크 총 예상 시간 → 소요시간 입력칸 자동 반영
+  const durEl = document.getElementById("gc-dur");
+  if (durEl) {
+    const totalH = effTasks.reduce((s, t) => s + (t.hours || 0), 0);
+    if (totalH > 0) durEl.value = Math.round(totalH * 10) / 10;
+  }
 }
 
 function copyTitle() {
