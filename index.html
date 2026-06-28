@@ -792,12 +792,7 @@ async function onProjectChange() {
   await loadTasks();
   setProjectCollapsed(true);
 }
-  const card = document.getElementById("setup-card");
-  const btn = document.getElementById("setup-toggle");
-  if (!card || !btn) return;
-  card.classList.toggle("collapsed", collapsed);
-  btn.textContent = collapsed ? "설정" : "접기";
-}
+
 
 function updateSetupCompact() {
   // Asana 점·라벨
@@ -820,6 +815,14 @@ function updateSetupCompact() {
   }
   // 양쪽 모두 연결 시 자동 축소
   if (token && gcConnected) setSetupCollapsed(true);
+}
+
+function setSetupCollapsed(collapsed) {
+  const card = document.getElementById("setup-card");
+  const btn = document.getElementById("setup-toggle");
+  if (!card || !btn) return;
+  card.classList.toggle("collapsed", collapsed);
+  btn.textContent = collapsed ? "설정" : "접기";
 }
 
 function toggleSetup() {
