@@ -243,6 +243,18 @@
     background: var(--text-faint); flex-shrink: 0;
   }
   .sc-dot.on { background: var(--ok-tx); }
+  /* 프로젝트 카드 축소 */
+  #project-card.collapsed { padding: 8px 14px; background: var(--surface-2); }
+  #project-card.collapsed #proj-body { display: none; }
+  #project-card.collapsed .proj-head { margin-bottom: 0; }
+  #project-card.collapsed .proj-title { display: none; }
+  #project-card.collapsed #reload-btn { display: none; }
+  .proj-compact-label {
+    flex: 1; font-size: 13px; color: var(--text-primary);
+    font-weight: 500; margin: 0 8px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .proj-head { margin-bottom: 12px; }
   .filter-row {
     display: flex; gap: 10px; align-items: stretch; margin-bottom: 12px;
   }
@@ -498,11 +510,17 @@
 </div>
 
 <div id="project-card" class="card hide">
-  <div class="flex-between" style="margin-bottom:12px">
-    <span style="font-weight:600;font-size:15px">프로젝트 선택</span>
-    <button onclick="loadTasks()" id="reload-btn">새로고침</button>
+  <div class="flex-between proj-head">
+    <span class="proj-title" style="font-weight:600;font-size:15px">프로젝트 선택</span>
+    <span id="proj-compact-label" class="proj-compact-label"></span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="toggleProject()" id="proj-toggle" style="display:none">변경</button>
+      <button onclick="loadTasks()" id="reload-btn">새로고침</button>
+    </div>
   </div>
-  <select id="project-sel" style="width:100%;padding:9px 11px;font-size:14px;border:1px solid var(--border-2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)" onchange="loadTasks()"></select>
+  <div id="proj-body">
+    <select id="project-sel" style="width:100%;padding:9px 11px;font-size:14px;border:1px solid var(--border-2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)" onchange="onProjectChange()"></select>
+  </div>
 </div>
 
 <div id="planner-card" class="card hide">
@@ -752,7 +770,28 @@ let subtaskLoadState = {};
 const selected = new Set();
 const expandedParents = new Set();
 
-function setSetupCollapsed(collapsed) {
+function setProjectCollapsed(collapsed) {
+  const card = document.getElementById('project-card');
+  const toggleBtn = document.getElementById('proj-toggle');
+  const reloadBtn = document.getElementById('reload-btn');
+  if (!card) return;
+  card.classList.toggle('collapsed', collapsed);
+  if (toggleBtn) toggleBtn.style.display = collapsed ? '' : 'none';
+}
+
+function toggleProject() {
+  const card = document.getElementById('project-card');
+  const isCollapsed = card.classList.contains('collapsed');
+  setProjectCollapsed(!isCollapsed);
+}
+
+async function onProjectChange() {
+  const sel = document.getElementById('project-sel');
+  const label = document.getElementById('proj-compact-label');
+  if (label && sel) label.textContent = sel.options[sel.selectedIndex]?.text || '';
+  await loadTasks();
+  setProjectCollapsed(true);
+}
   const card = document.getElementById("setup-card");
   const btn = document.getElementById("setup-toggle");
   if (!card || !btn) return;
@@ -878,7 +917,12 @@ async function loadProjects() {
     const sel = document.getElementById("project-sel");
     sel.innerHTML = allProjects.map(p => '<option value="' + p.gid + '">' + escapeHtml(p.name) + '</option>').join("");
     document.getElementById("project-card").classList.remove("hide");
-    if (allProjects.length) await loadTasks();
+    if (allProjects.length) {
+      const label = document.getElementById('proj-compact-label');
+      if (label) label.textContent = sel.options[0]?.text || '';
+      await loadTasks();
+      setProjectCollapsed(true);
+    }
   } catch (e) {
     setMsg("setup-msg", "프로젝트 로드 실패: " + e.message, "err");
   }
